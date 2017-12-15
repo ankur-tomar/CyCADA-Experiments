@@ -35,8 +35,8 @@ class CrossDomainNet(nn.Module):
         self.dbn48 = nn.BatchNorm2d(48, eps=1e-3)
         self.dbn64 = nn.BatchNorm2d(64, eps=1e-3)
 
-        self.pool22 = nn.MaxPool2d(2, 2)
-        self.pool21 = nn.MaxPool2d(2, 1)
+        self.pool22 = nn.MaxPool2d(2, 2, return_indices=True)
+        self.pool21 = nn.MaxPool2d(2, 1, return_indices=True)
         self.unpool22 = nn.MaxUnpool2d(2, 2)
         self.unpool21 = nn.MaxUnpool2d(2, 1)
 
@@ -55,15 +55,21 @@ class CrossDomainNet(nn.Module):
                 m.bias.data.zero_()
  
     def forward(self, x):
-        x = self.pool22(F.relu(self.bn24(self.conv1(x))))
-        x = self.pool22(F.relu(self.bn48(self.conv2(x))))
-        x = self.pool21(F.relu(self.bn64(self.conv3(x))))
-        x = self.unpool21(x)
+        x=F.relu(self.bn24(self.conv1(x)))
+        size1 = x.size()
+        x, index1 = self.pool22(x)
+        x = F.relu(self.bn48(self.conv2(x)))
+        size2 = x.size()
+        x, index2 = self.pool22(x)
+        x = F.relu(self.bn64(self.conv3(x)))
+        size3 = x.size()
+        x, index3 = self.pool21(x)      
+        x = self.unpool21(x,index3,size3)
         x = F.relu(x)
         x = self.dbn64(x)
         x = self.dconv1(x)
-        x = self.dconv2(self.dbn48(F.relu(self.unpool22(x))))
-        x = self.dconv3(self.dbn24(F.relu(self.unpool22(x))))
+        x = self.dconv2(self.dbn48(F.relu(self.unpool22(x,index2,size2))))
+        x = self.dconv3(self.dbn24(F.relu(self.unpool22(x,index1,size1))))
         return x
 
 class Discriminator(nn.Module):
